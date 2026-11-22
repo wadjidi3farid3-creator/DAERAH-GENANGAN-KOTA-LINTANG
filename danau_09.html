@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8"><title>Danau 9 - peta titik kunci (6,06 ha)</title>
+<style>
+body{font:14px 'Segoe UI',Arial,sans-serif;background:#0e1a26;color:#dbe7f4;margin:14px}
+h1{font-size:18px;margin:0 0 6px 0}
+#ringkas{color:#9fb4c9;max-width:100%;}
+#kendali{margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button{background:#1d3650;color:#dbe7f4;border:1px solid #3a5f86;padding:5px 12px;cursor:pointer;border-radius:4px}
+button:hover{background:#27496e}
+button:disabled{opacity:.45;cursor:default}
+button.aktif{background:#3a5f86;border-color:#7fc4ff;box-shadow:0 0 6px #7fc4ff}
+
+/* ===== LAYOUT DUAL-VIEW (v2.2): 3D KIRI, 2D KANAN ===== */
+#dualView{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);
+          gap:8px;margin-top:8px;align-items:stretch;}
+.panelCanvas{background:#0e1a26;border:1px solid #2c4358;border-radius:6px;
+             position:relative;overflow:hidden;padding:0;min-height:340px}
+.panelCanvas .lbl{position:absolute;top:6px;left:10px;font-size:11px;
+                  color:#9fb4c9;background:rgba(14,26,38,0.7);padding:2px 8px;
+                  border-radius:3px;pointer-events:none}
+.panelCanvas canvas{display:block;width:100%;height:100%}
+#cv3{cursor:grab}
+#cv2{cursor:crosshair}
+
+#stat{margin:8px 0;max-width:100%;font-size:13px}
+#stat b{color:#9fd8ff}
+#pesan{color:#ffb86b;min-height:18px;margin:4px 0;font-size:13px}
+table{border-collapse:collapse;margin-top:10px}
+th,td{border:1px solid #345;padding:4px 10px;text-align:left;font-size:13px}
+th{background:#182b3d}
+#catatan{color:#8fa6bc;max-width:100%;margin-top:10px;font-size:12px}
+#panelInfo{margin:10px 0;padding:10px 14px;background:#182b3d;border:1px solid #3a5f86;
+           border-radius:6px;max-width:100%;font-size:13px;min-height:22px;line-height:1.5}
+#panelInfo .kunci{font-weight:bold;color:#9fd8ff}
+#panelInfo .tutup{float:right;font-size:11px;padding:2px 8px;cursor:pointer;
+                  background:#1d3650;border:1px solid #3a5f86;border-radius:3px;color:#dbe7f4}
+.kartu{display:inline-block;vertical-align:top;width:49%;margin:10px 1% 0 0;
+       background:#182b3d;border:1px solid #2c4358;border-radius:6px;padding:10px 14px;font-size:13px;
+       box-sizing:border-box}
+.kartu h3{margin:0 0 6px 0;font-size:14px;color:#9fd8ff}
+.kartu h3 .btn-zoom{float:right;font-size:11px;padding:2px 8px;margin-top:-2px}
+.kartu table{margin:0;border:0}
+.kartu th,.kartu td{border:0;padding:2px 8px 2px 0;background:transparent;font-size:12px}
+.kartu th{color:#9fb4c9;font-weight:normal;text-align:left;width:46%}
+.kartu td{color:#dbe7f4;font-weight:bold}
+#infoTitik{margin-top:8px;max-width:100%}
+
+@media (max-width: 900px){
+  #dualView{grid-template-columns:1fr;}
+}
+</style></head><body>
+<h1>Danau 9 - peta titik kunci (6,06 ha)</h1>
+<div id="ringkas">Database: KONTUR.kml | CRS WGS84 (EPSG:4326) | sel DEM 25,0 m | 82 danau</div>
+<div id="pesan"></div>
+<div id="kendali">
+<span>Tinggi air: <input type="range" id="sAir" min="0" max="1000" value="1000" style="width:260px"> <span id="vAir"></span></span>
+<button id="bNavBibir">🟢 Bibir</button>
+<button id="bNavDalam">🔴 Terdalam</button>
+<button id="bReset3">Reset kamera 3D</button>
+<button id="bKml" title="Buka lokasi di Google Earth web (tab baru) dan unduh KML titik kunci + area genangan">🌐 Buka di Google Earth</button>
+<button id="bGmap" title="Pin merah langsung muncul di titik yang dipilih (Google Maps, tab baru)">📍 Titik di Google Maps</button>
+<input id="inKoor" placeholder="lat, lng — mis. 4.281231, 98.062937" style="width:200px" title="Ketik koordinat WGS84 (lat, lng) lalu tekan Enter atau tombol pensil">
+<button id="bSetKoor" title="Terapkan koordinat yang diketik: titik tampil di 2D dan 3D">✏️</button>
+<button id="bHapusKoor" title="Hapus titik yang dipilih dan kosongkan kotak koordinat">🗑️</button>
+</div>
+
+<div id="panelInfo">Klik <b>icon panah</b> di 3D (🟢 Bibir / 🔴 Terdalam) atau tombol navigasi untuk detail titik kunci. <b>Klik di mana saja pada peta 2D</b> untuk info koordinat, elevasi, dan kedalaman titik tersebut. Titik yang diklik juga tampil sebagai panah kuning <b>📍 Titik</b> di 3D. Atau ketik koordinat <b>lat, lng</b> di kotak input lalu tekan <b>✏️/Enter</b> untuk menampilkannya di 2D &amp; 3D; <b>🗑️</b> menghapus titik.</div>
+
+<!-- ===== DUAL-VIEW: 3D KIRI (60%) + 2D KANAN (40%) ===== -->
+<div id="dualView">
+  <div class="panelCanvas">
+    <span class="lbl">Tampilan 3D</span>
+    <canvas id="cv3"></canvas>
+  </div>
+  <div class="panelCanvas">
+    <span class="lbl">Tampak Atas (2D)</span>
+    <canvas id="cv2"></canvas>
+  </div>
+</div>
+
+<div id="infoTitik">
+  <div class="kartu" id="kartuBibir">
+    <h3>🟢 Bibir Terendah <button class="btn-zoom" onclick="zoomKe('bibir')">🔍 Zoom</button></h3>
+    <table>
+      <tr><th>Elevasi</th><td id="kb-elev">-</td></tr>
+      <tr><th>Kedalaman air</th><td id="kb-dalam">-</td></tr>
+      <tr><th>Koordinat</th><td id="kb-ll">-</td></tr>
+      <tr><th>Status</th><td id="kb-status">-</td></tr>
+    </table>
+  </div>
+  <div class="kartu" id="kartuTerdalam">
+    <h3>🔴 Dasar Terdalam <button class="btn-zoom" onclick="zoomKe('dalam')">🔍 Zoom</button></h3>
+    <table>
+      <tr><th>Elevasi</th><td id="kt-elev">-</td></tr>
+      <tr><th>Kedalaman air</th><td id="kt-dalam">-</td></tr>
+      <tr><th>Kedalaman maks</th><td id="kt-maks">-</td></tr>
+      <tr><th>Koordinat</th><td id="kt-ll">-</td></tr>
+    </table>
+  </div>
+</div>
+
+<div id="stat"></div>
+<div><table><tr><th style='text-align:left'>Danau</th><td>Danau 9 (9)</td></tr><tr><th style='text-align:left'>Luas maksimum</th><td>60625 m2 = 6,062 ha</td></tr><tr><th style='text-align:left'>Volume tampung maksimum</th><td>67287 m3</td></tr><tr><th style='text-align:left'>Level air penuh / dasar</th><td>11,401 / 7,500 m</td></tr><tr><th style='text-align:left'>Kedalaman maks / rata-rata</th><td>3,90 / 1,11 m</td></tr><tr><th style='text-align:left'>Panjang x lebar (PCA)</th><td>570 x 165 m | azimut 53,0 derajat</td></tr><tr><th style='text-align:left'>Bibir terendah</th><td>tepi data - elevasi 11,401 m</td></tr><tr><th style='text-align:left'>Grid animasi</th><td>32 x 27 ubin | 1 ubin = 25,0 m (subsample 1 x sel 25,0 m)</td></tr><tr><th style='text-align:left'>Sumber database</th><td>KONTUR.kml (skema 1)</td></tr><tr><th style='text-align:left'>Sistem koordinat</th><td>WGS84 (EPSG:4326)</td></tr></table></div>
+<div id="catatan">Tata letak: 3D (kiri) + peta top-down (kanan). Hanya 2 titik kunci yang ditampilkan sebagai icon panah 3D. Klik icon untuk detail titik kunci, atau klik di mana saja pada peta 2D untuk info koordinat WGS84, elevasi tanah, kedalaman air, dan status. Slider tinggi air mengubah nilai kedalaman & luas/volume real-time. Tombol Buka di Google Earth membuka lokasi di Google Earth web (tab baru) dan mengunduh KML titik kunci + area genangan pada tinggi air saat ini (seret ke globe GE). Grid = subsample database (1 ubin = 25,0 m).</div>
+<script>
+var D={"nama":"Danau 9","id":9,"nx":32,"ny":27,"step":25.0,"sel_asli":25.0,"lang":1,"z":[[20.25,20.25,21.0,20.75,20.25,19.75,19.0,17.75,15.75,13.5,12.25,11.75,10.75,10.75,11.75,10.5,10.0,11.0,12.25,12.0,12.0,12.314,12.551,12.703,12.775,null,null,null,null,null,null,null],[17.75,18.25,18.75,19.25,19.0,18.75,18.25,17.25,15.75,14.5,14.75,13.75,12.0,11.25,12.5,12.75,12.333,12.0,12.75,13.25,13.25,13.43,13.555,13.628,13.661,null,null,null,null,null,null,null],[15.5,14.75,15.5,15.5,17.25,17.75,16.75,16.25,15.75,16.0,16.0,15.25,13.25,11.75,12.75,14.5,15.0,14.0,14.0,14.25,14.5,14.6,14.611,14.594,14.579,null,null,null,null,null,null,null],[14.25,12.0,11.5,12.75,13.75,14.5,15.25,15.25,14.75,15.25,16.0,15.25,13.75,12.25,13.5,15.5,17.5,17.0,16.0,15.75,16.0,15.859,15.696,15.558,15.481,null,null,null,null,null,null,null],[13.0,11.0,10.0,10.5,12.0,13.0,13.25,13.5,13.5,14.0,14.25,14.25,13.25,13.5,15.0,18.25,19.75,19.5,18.0,17.5,17.5,17.141,16.756,16.462,16.306,null,null,null,null,null,null,null],[11.75,10.25,10.25,10.5,11.75,11.75,11.75,12.0,12.0,12.75,12.75,12.5,13.5,14.5,16.5,20.0,22.25,23.25,19.25,19.25,19.25,18.447,17.725,17.226,16.976,null,null,null,null,null,null,null],[10.5,10.75,11.0,11.5,11.75,11.5,11.0,11.0,11.25,11.5,11.25,11.5,12.75,14.5,17.25,20.75,22.5,23.25,22.0,21.75,21.5,19.672,18.472,17.742,17.396,null,null,null,null,null,null,null],[11.0,11.75,12.25,12.5,12.25,11.75,11.5,11.0,10.5,10.25,10.25,10.5,11.5,13.75,16.0,19.5,21.75,23.125,23.25,23.0,22.75,20.269,18.749,17.873,17.471,null,null,null,null,null,null,null],[12.0,12.75,14.0,14.25,13.625,13.25,12.25,11.5,10.75,10.25,10.0,10.0,10.5,11.75,14.5,17.5,20.0,22.0,22.75,22.75,22.5,19.903,18.384,17.53,17.143,null,null,null,null,null,null,null],[13.0,13.75,15.0,15.5,15.0,14.25,13.25,12.75,12.0,11.5,11.5,10.75,10.0,10.25,12.5,14.25,18.0,19.75,20.5,20.5,20.25,18.458,17.354,16.719,16.428,null,null,null,null,null,null,null],[14.0,14.5,15.75,16.25,16.0,15.5,15.25,14.5,14.25,14.0,13.25,12.25,11.0,10.25,10.0,12.5,14.0,16.0,17.0,17.0,17.0,16.325,15.857,15.564,15.422,null,null,null,null,null,null,null],[14.5,15.0,15.75,16.75,17.0,16.75,16.0,15.375,15.5,15.25,14.75,13.5,12.0,10.5,9.5,9.75,11.25,12.25,13.25,13.5,13.583,13.986,14.183,14.257,14.275,null,null,null,null,null,null,null],[14.75,15.0,15.5,16.5,16.5,16.25,15.75,15.5,15.5,15.5,15.0,13.75,12.25,10.5,9.75,9.5,9.0,10.0,9.75,9.75,10.25,11.854,12.633,13.008,13.145,null,null,null,null,null,null,null],[13.75,14.0,14.75,15.5,15.5,15.25,15.0,14.75,15.0,15.25,14.75,13.25,12.0,11.0,10.25,9.75,9.0,8.5,8.0,7.5,9.074,10.546,11.487,11.996,12.151,11.874,null,null,null,null,null,null],[12.5,12.75,13.5,13.75,14.0,14.0,13.75,13.75,13.75,14.0,13.75,13.25,12.0,11.5,11.0,10.0,9.25,8.5,8.0,8.0,8.0,9.767,10.774,11.338,11.59,11.597,11.519,null,null,null,null,null],[11.5,12.0,12.0,12.25,12.5,13.0,12.75,12.5,12.75,13.25,13.375,12.75,12.75,12.5,11.75,10.75,9.75,9.25,9.0,9.0,9.5,9.75,10.504,10.991,11.275,11.403,11.441,null,null,null,null,null],[11.5,11.5,11.5,11.775,11.75,12.0,12.25,12.0,12.0,12.5,13.0,13.5,13.5,13.25,12.75,11.5,10.5,10.0,10.0,10.5,10.5,10.75,10.5,10.846,11.117,11.301,11.401,null,null,null,null,null],[11.5,11.5,11.525,11.598,11.593,11.5,11.5,11.875,12.0,12.5,13.0,14.0,14.0,13.5,13.0,11.75,11.0,11.25,11.25,11.25,11.0,10.75,10.5,10.776,11.047,11.282,11.46,11.601,null,null,null,null],[12.0,11.5,11.5,11.5,11.525,11.506,11.5,12.0,12.0,12.75,13.25,14.25,14.25,14.0,13.25,12.0,11.5,11.75,12.0,11.75,10.75,10.5,10.553,10.711,11.015,11.318,11.559,11.741,11.89,null,null,null],[12.25,12.25,12.25,11.75,11.5,11.5,12.0,12.25,12.5,13.0,13.75,14.75,15.0,14.5,13.5,12.25,12.0,12.0,12.0,11.75,10.75,10.5,10.5,10.5,10.982,11.415,11.716,11.916,12.038,null,null,null],[12.5,13.0,12.75,12.5,12.25,12.0,12.25,13.0,13.0,13.0,13.75,14.75,15.0,14.5,13.5,12.75,12.0,12.0,12.25,12.0,11.25,11.25,11.25,11.0,11.0,11.645,11.974,12.168,12.308,12.47,null,null],[12.783,13.25,13.75,13.5,13.0,12.75,12.5,12.75,12.75,13.5,14.25,14.75,14.688,14.5,14.0,12.75,12.0,11.5,12.0,12.25,12.25,12.25,11.75,11.75,11.75,12.191,12.367,12.473,12.558,12.631,null,null],[12.782,13.25,13.5,13.75,13.5,13.0,12.0,12.0,12.25,13.25,14.25,14.75,14.5,14.5,13.5,12.667,12.25,11.75,12.0,12.75,12.75,12.75,12.5,12.5,12.75,13.0,12.832,12.8,12.817,12.867,12.97,null],[12.5,12.5,12.75,13.0,13.25,13.0,12.0,11.5,11.75,12.5,13.5,13.75,13.75,14.5,13.5,13.25,13.0,12.75,13.25,13.5,13.75,13.5,13.25,13.25,13.25,13.227,13.16,13.079,13.045,13.048,13.074,null],[12.0,12.0,12.25,12.25,12.5,12.5,11.75,11.5,11.5,12.25,12.5,12.75,13.5,14.25,14.75,14.5,13.75,13.5,14.25,15.0,15.0,14.25,14.25,14.0,13.5,13.5,13.5,13.311,13.234,13.207,13.203,null],[11.75,11.25,11.25,11.25,11.75,11.75,11.5,11.5,11.5,11.5,11.75,12.25,13.25,14.75,16.0,15.75,15.0,14.5,14.75,15.75,15.75,15.25,14.75,14.0,13.691,13.571,13.515,13.432,13.375,13.342,13.328,null],[11.25,10.75,10.5,10.75,11.25,11.5,11.625,11.5,11.0,11.0,11.25,12.0,13.25,15.0,16.5,16.5,15.5,15.0,15.25,15.5,15.75,15.25,14.5,14.0,13.693,13.58,13.556,13.527,13.492,13.457,13.439,13.463]],"basah":[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,1,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],"level":11.4008,"dasar":7.5,"pk":{"luas_sel_m2":625.0,"n_sel":97,"elev_m":[7.5,8.0,8.5,9.0,9.074,9.25,9.5,9.75,9.767,10.0,10.25,10.5,10.504,10.546,10.553,10.711,10.75,10.774,10.776,10.846,10.982,10.991,11.0,11.015,11.047,11.117,11.25,11.275,11.282,11.301,11.318,11.338],"jumlah_sel":[1,4,2,4,1,2,3,7,1,8,7,14,1,1,1,1,7,1,1,1,1,1,10,1,1,1,9,1,1,1,1,1],"luas_kumulatif_m2":[625.0,3125.0,4375.0,6875.0,7500.0,8750.0,10625.0,15000.0,15625.0,20625.0,25000.0,33750.0,34375.0,35000.0,35625.0,36250.0,40625.0,41250.0,41875.0,42500.0,43125.0,43750.0,50000.0,50625.0,51250.0,51875.0,57500.0,58125.0,58750.0,59375.0,60000.0,60625.0],"volume_kumulatif_m3":[0.0,312.5,1875.0,4062.5,4571.3,5891.3,8078.7,10735.0,10990.0,14630.6,19786.9,26036.9,26171.9,27615.6,27860.6,33489.4,34903.1,35878.1,35960.6,38891.9,44671.9,45060.0,45453.8,46203.8,47823.8,51411.3,58310.6,59748.1,60155.0,61271.2,62280.6,63480.6]},"tak_lalu":1.5,"poligon":[{"luar":[[7.124805535962805,5.9998296875692905],[7.875035114730708,5.999805842319038],[8.437561048206408,6.062360020829365],[8.812383336788043,6.187492125637363],[8.99994591775583,6.3752015576488335],[8.99980436337646,6.625046625146642],[9.062624283931218,6.812464821529574],[9.187517825367395,6.93745722304564],[9.37492890666239,7.0000232991878875],[9.624857531730086,7.000163061704952],[9.812561092986725,6.937585261913482],[9.937595678316429,6.812290428213309],[9.999962360810024,6.625162959212903],[10.000103453435004,6.374875705013983],[10.062469617386814,6.187306037440431],[10.187504778525327,6.062453424127307],[10.37520839878125,5.999875669167377],[10.625137081257998,6.000015521042514],[10.812548166690394,6.062581681443844],[10.93744165128097,6.187574138636701],[10.99981753811473,6.374992885880638],[11.000119759037625,6.624837384456769],[11.062496174285188,6.812698333498556],[11.187389626279474,6.937690792456269],[11.374800111916848,6.999814768084325],[11.625172626879067,6.99995414048899],[11.812583630906884,7.062520340390038],[11.93747704214882,7.187512819096446],[11.999852863680571,7.374931569849141],[12.000155562006404,7.62521825668402],[12.062531377044506,7.812637006584555],[12.18742475568317,7.937629487055819],[12.374835694786162,8.000195704817306],[12.625207585361785,7.99989293220453],[12.812618507985025,8.062459171612282],[12.937511845869013,8.187451671822927],[12.999887602098752,8.374870426107664],[13.00019024290843,8.625157098539638],[13.062565992642194,8.81257585196523],[13.187459297981114,8.937568353952374],[13.374870155618991,9.00013461122755],[13.624798035002314,8.999832432954571],[13.812652797894552,9.062398175152484],[13.937546062420587,9.187390696885995],[13.999921753339004,9.374809454693459],[13.999780415098648,9.625096649415791],[14.062600021047983,9.812514869689476],[14.187493253024295,9.937507393192499],[14.37490402930649,10.000073689981363],[14.62483235381078,10.00021377180703],[14.81268650060054,10.062337351068855],[14.937579691763966,10.187329894318246],[14.999955851864069,10.37519085820997],[14.999813921756576,10.625035835895687],[15.124782451516948,10.812378939713817],[15.374861956513486,10.93766238280572],[15.750051360270009,11.000001787515357],[16.249907280076297,10.999839937111828],[16.62509717454901,11.062621635855175],[16.87517604966415,11.187462970926425],[17.000144447330385,11.374806117401459],[17.000002920741682,11.62509326718049],[17.250157067426482,11.812285169512034],[17.750164526947774,11.93770901713986],[18.500023671293164,12.000038312592078],[19.50017948059598,12.000157095827163],[20.250038495403714,12.062486766963266],[20.750045179901644,12.18746882123407],[21.000199559475295,12.375103148622438],[21.000057221231984,12.624948033671826],[21.062432473457886,12.812366826874204],[21.18732530641835,12.93735952996416],[21.375179637807886,12.999925613875966],[21.62510762989521,13.000066162012518],[21.812518024027813,13.06263280338142],[21.937410816221963,13.18762552623637],[21.999786009662785,13.375044323846232],[22.00008753486909,13.62488865871681],[22.12505608293228,13.812674118017313],[22.375134488337206,13.937515771882609],[22.749879356555176,13.999856385767925],[23.25017906653229,14.000137134934775],[23.624923891066572,14.062477840257342],[23.875002201127355,14.187319588661193],[23.999970616947394,14.375105090609287],[23.99982809057692,14.624949930880684],[24.062647073687984,14.812368202111683],[24.18753971517086,14.937360977099743],[24.374949932545423,14.999927727049217],[24.6248777297372,15.000068463715724],[24.812287930692545,15.062635235297494],[24.937624451920854,15.187627494633198],[24.99999945553485,15.375046305805444],[24.99985687183682,15.624891131650656],[25.06267578943167,15.812309406567365],[25.187568357528654,15.937302203122526],[25.37497849349398,15.999868992648553],[25.624906201246194,16.00000978689408],[25.812467230914628,16.187719838446938],[25.937661037631333,16.562556930885183],[26.00004424934741,17.124963796148077],[26.00006082801614,17.874939901803156],[25.937702518827283,18.437497202444355],[25.812525401196908,18.812636239489073],[25.62497284684563,18.999914280942175],[25.375045892819763,19.000215736576354],[25.187418157975188,19.12514328717254],[25.062534114629962,19.375138592426666],[24.99994985041674,19.750202181520873],[25.00010874771513,20.249891311039683],[24.687597148313653,20.62481423781719],[24.062415093241725,20.874971062110273],[23.125005925493316,20.999919217636343],[21.874926130748353,21.00010168566834],[20.937583313984796,20.812412827846128],[20.312534048703967,20.437295102484057],[19.999778920067474,19.875190541113263],[20.00020484236302,19.125213604564777],[19.750041798171587,18.562591234142893],[19.250177512550728,18.187322392822242],[18.500168561949394,17.999849928205368],[17.500014986358583,18.000174023027068],[16.750081177721732,17.87505247003166],[16.249923733968753,17.624927831224632],[15.99998660537647,17.249799460337965],[15.999826482231729,16.750110054176766],[15.93766822921578,16.375196891203522],[15.812623981526121,16.125061044287868],[15.625138186740223,16.000144185663668],[15.375210318749305,16.000004125840498],[15.18735595843289,15.937438384010456],[15.062462943135762,15.812445875050035],[15.000087355340366,15.625027128881776],[14.999785284085664,15.375182680489962],[14.937409155149943,15.18732173090335],[14.812516107233241,15.06232922371477],[14.625106137297117,15.000205165673979],[14.375178179829382,15.000065163378604],[14.187323737922124,14.93749946119031],[14.062430649241433,14.812506973764393],[14.000054996106774,14.625088231125847],[14.000196253573522,14.374801028976217],[13.937376673030666,14.187382822309155],[13.812483551735058,14.062390336648095],[13.625072965694125,13.999824115564115],[13.37514545352431,14.000126373397652],[13.187583494428544,13.812416835285257],[13.062388146312442,13.437579892254435],[13.000002810438163,12.875172799152788],[12.999983607651666,12.12519609577721],[12.937597749847919,11.562346798109356],[12.812402343745344,11.187509845355526],[12.62484022584511,10.999800301049836],[12.374912477436009,11.000102584601846],[12.187501691360957,10.937536401536782],[12.06260839869734,10.812543942718767],[11.999788680903148,10.625125738380012],[11.99992985593155,10.374838510209228],[11.937554053210187,10.187419768050313],[11.812660727826879,10.062427310987841],[11.62480595532572,9.999861682797782],[11.374878117549233,10.000164023882244],[11.187467250057962,9.937597880321555],[11.06257388402708,9.812605443024076],[11.00019802237628,9.625186705233064],[10.999895218431483,9.37489999963902],[10.812333435832988,9.18763271654956],[10.437511574958917,9.062500476934947],[9.874986233965029,8.999946082385723],[9.12520133444108,8.999969093063847],[8.562675911928528,8.937414907929487],[8.187409966911655,8.812283429726959],[7.999847971557174,8.62501626193989],[7.999989420196507,8.375171175515279],[7.937612833403982,8.187310250396841],[7.812719271904789,8.062317893807776],[7.624864810730796,8.000194649950135],[7.374936226943974,8.000055050188676],[7.187525135818869,7.937489087751601],[7.062631533616223,7.812496750894934],[6.999811501265503,7.625078570418991],[6.999952357220463,7.374791266724933],[6.9375762404804115,7.187372547853738],[6.812682605625596,7.062380212754943],[6.624827527492307,6.99981480573304],[6.374899389713537,7.000117466223892],[6.187488217174542,6.937551543272566],[6.0625945416186005,6.812559227901511],[6.000218365960754,6.625140513379592],[5.99991524244193,6.3748537328117525],[6.187467800362501,6.187574540572241],[6.562431057994254,6.062419103970751]],"lubang":[]}],"bibir":{"px":[26.500033397336956,16.499970413513946],"nama":"Bibir terendah","elev":11.401},"dalam":{"px":[19.50021504540695,13.500109884417617],"nama":"Dasar terdalam","elev":7.5},"bibir_ll":[98.0759298,4.2870067],"dalam_ll":[98.0743538,4.2863264],"kedalaman_maks":3.901,"level_air":11.401,"sudut":[[98.06996477,4.28326814],[98.07717323,4.28327688],[98.0771659,4.28938268],[98.06995739,4.28937393]]};
+(function(){
+"use strict";
+/* ================== LOGIKA MURNI ================== */
+var nx=D.nx, ny=D.ny, Z=D.z, WET=D.basah, step=D.step, lev=D.level, das=D.dasar;
+var PK=D.pk, SUD=D.sudut;
+var W=lev;
+
+function dalam(j,i){ if(j<0||i<0||j>=ny||i>=nx) return null;
+  var z=Z[j][i]; if(z===null||z===undefined) return null;
+  if(!WET[j][i]) return 0; return Math.max(0, W-z); }
+function cariPK(tv){ var lo=0,hi=PK.elev_m.length;
+  while(lo<hi){var m=(lo+hi)>>1; if(PK.elev_m[m]<=tv) lo=m+1; else hi=m;} return lo; }
+function luasVol(){ var k=cariPK(W);
+  var lu=(k>0)?PK.luas_kumulatif_m2[k-1]:0;
+  var vo=(k>0)?PK.volume_kumulatif_m3[k-1]+PK.luas_kumulatif_m2[k-1]*(W-PK.elev_m[k-1]):0;
+  return [lu,vo]; }
+function lonlat(px,py){ var fx=px/nx, v=py/ny;
+  var sw=SUD[0],se=SUD[1],ne=SUD[2],nw=SUD[3];
+  return [sw[0]*(1-fx)*(1-v)+se[0]*fx*(1-v)+ne[0]*fx*v+nw[0]*(1-fx)*v,
+          sw[1]*(1-fx)*(1-v)+se[1]*fx*(1-v)+ne[1]*fx*v+nw[1]*(1-fx)*v]; }
+function fmt(x,d){ var s=(Math.round(x*Math.pow(10,d))/Math.pow(10,d)).toFixed(d);
+  var p=s.split('.'), a=p[0], b=p[1], t2='', n=0;
+  for(var q=a.length-1;q>=0;q--){ t2=a[q]+t2; n++; if(n%3===0&&q>0) t2='.'+t2; }
+  return t2+(b?','+b:''); }
+
+/* ================== ELEMEN DOM ================== */
+var cv3=document.getElementById('cv3'), c3=cv3.getContext('2d');
+var cv2=document.getElementById('cv2'), c2=cv2.getContext('2d');
+var pesanEl=document.getElementById('pesan'), statEl=document.getElementById('stat');
+
+/* ================== KEADAAN ================== */
+var probe=null;               /* {j, i} titik yang diklik di 2D */
+var yaw=-0.7, pitch=1.05, zoom=1.0, kv=1.15;
+var titikAktif=null;          /* 'bibir' | 'dalam' | null */
+var blinkState=false, blinkTimer=null;
+var HOTSPOTS=[];              /* [{x,y,nama,warna}] posisi layar 3D */
+
+/* Parameter kamera 3D (di-recompute saat resize) */
+var OX3=0, OY3=0, S3=1, CP3=1, SP3=0;
+/* Skala & offset peta 2D (di-recompute saat resize) */
+var S2=1, OX2=0, OY2=0;
+
+function pesan(t){ pesanEl.textContent=t; }
+
+/* ================== 3D DATA (cached) ================== */
+var bz=[]; for(var j=0;j<ny;j++) for(var i=0;i<nx;i++){ var zv=Z[j][i]; if(zv!==null&&zv!==undefined) bz.push(zv); }
+var zmin=Math.min.apply(null,bz), zmax=Math.max.apply(null,bz), zr=Math.max(zmax-zmin,1e-6);
+var cx=(nx-1)/2, cyc=(ny-1)/2, rng=Math.max(nx-1,ny-1)*step; if(rng<=0) rng=1;
+function WZ(v){ return (v-(zmin+zmax)/2)/zr*kv; }
+var NC=(nx+1)*(ny+1);
+var CXa=new Float64Array(NC), CYa=new Float64Array(NC), CH=new Float64Array(NC), COK=new Uint8Array(NC);
+for(var j2=0;j2<=ny;j2++) for(var i2=0;i2<=nx;i2++){
+  var k=j2*(nx+1)+i2;
+  CXa[k]=(i2-0.5-cx)*step/rng; CYa[k]=(j2-0.5-cyc)*step/rng;
+  var s=0, n=0, zz;
+  if(j2<ny&&i2<nx&&(Z[j2][i2]!==null&&Z[j2][i2]!==undefined)){ zz=Z[j2][i2]; s+=zz; n++; }
+  if(j2>0&&i2<nx&&(Z[j2-1][i2]!==null&&Z[j2-1][i2]!==undefined)){ zz=Z[j2-1][i2]; s+=zz; n++; }
+  if(j2<ny&&i2>0&&(Z[j2][i2-1]!==null&&Z[j2][i2-1]!==undefined)){ zz=Z[j2][i2-1]; s+=zz; n++; }
+  if(j2>0&&i2>0&&(Z[j2-1][i2-1]!==null&&Z[j2-1][i2-1]!==undefined)){ zz=Z[j2-1][i2-1]; s+=zz; n++; }
+  COK[k]=(n>0)?1:0; CH[k]=(n>0)?s/n:0;
+}
+var L=[-0.45,0.35,0.82], ln=Math.sqrt(L[0]*L[0]+L[1]*L[1]+L[2]*L[2]); L=[L[0]/ln,L[1]/ln,L[2]/ln];
+function ramp(t){ var st=[[86,66,50],[152,130,92],[118,144,84],[176,190,140],[228,228,222]];
+  var x=Math.max(0,Math.min(1,t))*(st.length-1), k0=Math.floor(x), k1=Math.min(k0+1,st.length-1), f=x-k0;
+  var r=[0,0,0]; for(var q=0;q<3;q++) r[q]=Math.round(st[k0][q]+(st[k1][q]-st[k0][q])*f);
+  return r; }
+var cells=[], colT=[], wat=[];
+for(var j3=0;j3<ny;j3++) for(var i3=0;i3<nx;i3++){
+  var k00=j3*(nx+1)+i3, k10=k00+1, k01=k00+(nx+1), k11=k01+1;
+  if(!COK[k00]||!COK[k10]||!COK[k01]||!COK[k11]) continue;
+  var zb=(CH[k00]+CH[k10]+CH[k01]+CH[k11])/4;
+  var cc=ramp((zb-zmin)/zr);
+  cells.push([k00,k10,k11,k01]);
+  var v1x=CXa[k10]-CXa[k00], v1y=CYa[k10]-CYa[k00], v1z=WZ(CH[k10])-WZ(CH[k00]);
+  var v2x=CXa[k01]-CXa[k00], v2y=CYa[k01]-CYa[k00], v2z=WZ(CH[k01])-WZ(CH[k00]);
+  var nxn=v1y*v2z-v1z*v2y, nyn=v1z*v2x-v1x*v2z, nzn=v1x*v2y-v1y*v2x;
+  var l2=Math.sqrt(nxn*nxn+nyn*nyn+nzn*nzn)||1;
+  var br=0.55+0.45*Math.max(0,(nxn*L[0]+nyn*L[1]+nzn*L[2])/l2);
+  colT.push('rgb('+Math.round(cc[0]*br)+','+Math.round(cc[1]*br)+','+Math.round(cc[2]*br)+')');
+  if(WET[j3][i3]&&Z[j3][i3]!==null&&Z[j3][i3]!==undefined) wat.push([k00,k10,k11,k01,Z[j3][i3]]);
+}
+var X1=new Float64Array(NC), Y1=new Float64Array(NC);
+var daftar=[], dpt=[], perluB=true;
+function bangun3(){
+  var cp=Math.cos(pitch), sp=Math.sin(pitch);
+  for(var k=0;k<NC;k++){ if(!COK[k]) continue;
+    X1[k]=CXa[k]; Y1[k]=CYa[k]; }
+  var cyy=Math.cos(yaw), syy=Math.sin(yaw);
+  for(var k2=0;k2<NC;k2++){ if(!COK[k2]) continue;
+    var xr=X1[k2]*cyy-Y1[k2]*syy; var yr=X1[k2]*syy+Y1[k2]*cyy;
+    X1[k2]=xr; Y1[k2]=yr; }
+  daftar=[]; dpt=[];
+  var c, zw=WZ(W), dp;
+  for(c=0;c<cells.length;c++){
+    var q=cells[c];
+    dp=(Y1[q[0]]*cp+WZ(CH[q[0]])*sp+Y1[q[1]]*cp+WZ(CH[q[1]])*sp+
+        Y1[q[2]]*cp+WZ(CH[q[2]])*sp+Y1[q[3]]*cp+WZ(CH[q[3]])*sp)/4;
+    daftar.push([dp,0,c]); dpt.push(dp);
+  }
+  for(var w=0;w<wat.length;w++){
+    var e=wat[w]; if(e[4]>W+1e-9) continue;
+    dp=(Y1[e[0]]*cp+zw*sp+Y1[e[1]]*cp+zw*sp+Y1[e[2]]*cp+zw*sp+Y1[e[3]]*cp+zw*sp)/4;
+    daftar.push([dp,1,w]); dpt.push(dp);
+  }
+  var idx=[];
+  for(var f=0;f<daftar.length;f++) idx.push(f);
+  idx.sort(function(a,b){ return dpt[b]-dpt[a]; });
+  var d2=[], p2=[];
+  for(var g=0;g<idx.length;g++){ d2.push(daftar[idx[g]]); p2.push(dpt[idx[g]]); }
+  daftar=d2; dpt=p2;
+  perluB=false;
+}
+
+/* ================ RESIZE: hitung ulang ukuran & parameter ================ */
+function sinkronUkuranCanvas(){
+  function ukur(cv){
+    var rect = cv.parentElement.getBoundingClientRect();
+    var w = Math.max(200, Math.floor(rect.width));
+    var h = Math.max(200, Math.floor(rect.height));
+    cv.width  = w;
+    cv.height = h;
+    return {w:w, h:h};
+  }
+  var dim3 = ukur(cv3);
+  var dim2 = ukur(cv2);
+
+  /* 3D: ukuran proyeksi proporsional terhadap tinggi & lebar */
+  S3 = Math.min(dim3.w, dim3.h) * 0.46 * zoom;
+  OX3 = dim3.w * 0.5;
+  OY3 = dim3.h * 0.52;
+
+  /* 2D: skala untuk muat nx*ny dalam container */
+  S2 = Math.min(dim2.w / nx, dim2.h / ny);
+  OX2 = (dim2.w - nx * S2) / 2;
+  OY2 = (dim2.h - ny * S2) / 2;
+}
+
+/* ================ PROYEKSI 3D ke layar (hotspot) ================ */
+function hitungLayar3D(){
+  CP3=Math.cos(pitch); SP3=Math.sin(pitch);
+  function ubinKeXYLayar(px,py,elev){
+    var xw=(px-0.5-cx)*step/rng, yw=(py-0.5-cyc)*step/rng;
+    var cyw=Math.cos(yaw), syw=Math.sin(yaw);
+    var x1=xw*cyw-yw*syw, y1=xw*syw+yw*cyw;
+    var sx=OX3+x1*S3;
+    var sy=OY3-(WZ(elev)*CP3-y1*SP3)*S3;
+    return {x:sx,y:sy};
+  }
+  HOTSPOTS=[];
+  var pB=ubinKeXYLayar(D.bibir.px[0],D.bibir.px[1],D.bibir.elev);
+  HOTSPOTS.push({x:pB.x,y:pB.y,nama:'bibir',warna:'#7fe08a'});
+  var pT=ubinKeXYLayar(D.dalam.px[0],D.dalam.px[1],D.dalam.elev);
+  HOTSPOTS.push({x:pT.x,y:pT.y,nama:'dalam',warna:'#ff6b6b'});
+  if(probe){
+    var pj=Math.floor(probe[0]), pi=Math.floor(probe[1]);
+    if(pj>=0&&pi>=0&&pj<ny&&pi<nx&&Z[pj][pi]!==null&&Z[pj][pi]!==undefined){
+      var pP=ubinKeXYLayar(probe[1]+0.5, probe[0]+0.5, Z[pj][pi]);
+      HOTSPOTS.push({x:pP.x,y:pP.y,nama:'probe',warna:'#ffd166'});
+    }
+  }
+}
+
+/* ================ GAMBAR 3D ================ */
+function gambar3(){
+  if(perluB) bangun3();
+  var cp=Math.cos(pitch), sp=Math.sin(pitch);
+  var S=S3, ox=OX3, oy=OY3;
+  function px(k){ return ox+X1[k]*S; }
+  function py(k,zw){ return oy-(zw*cp-Y1[k]*sp)*S; }
+  c3.fillStyle='#0e1a26'; c3.fillRect(0,0,cv3.width,cv3.height);
+
+  var zw=WZ(W), selt=Math.max(lev-das,1e-6);
+  for(var f=0;f<daftar.length;f++){
+    var it=daftar[f];
+    c3.beginPath();
+    if(it[1]===0){
+      var q=cells[it[2]];
+      c3.moveTo(px(q[0]),py(q[0],WZ(CH[q[0]])));
+      c3.lineTo(px(q[1]),py(q[1],WZ(CH[q[1]])));
+      c3.lineTo(px(q[2]),py(q[2],WZ(CH[q[2]])));
+      c3.lineTo(px(q[3]),py(q[3],WZ(CH[q[3]])));
+      c3.fillStyle=colT[it[2]];
+    }else{
+      var e=wat[it[2]];
+      var dpw=Math.min(1,(W-e[4])/selt);
+      c3.moveTo(px(e[0]),py(e[0],zw));
+      c3.lineTo(px(e[1]),py(e[1],zw));
+      c3.lineTo(px(e[2]),py(e[2],zw));
+      c3.lineTo(px(e[3]),py(e[3],zw));
+      c3.fillStyle='rgba(30,'+Math.round(140-60*dpw)+','+Math.round(150+80*dpw)+',0.62)';
+    }
+    c3.closePath(); c3.fill();
+  }
+
+  hitungLayar3D();
+  for(var h=0;h<HOTSPOTS.length;h++){
+    var hp=HOTSPOTS[h];
+    var dipilih=(titikAktif===hp.nama);
+    gambarPanah3D(hp.x,hp.y,hp.warna,dipilih,namaSingkat(hp.nama));
+  }
+}
+
+function namaSingkat(nama){
+  if(nama==='bibir') return 'Bibir';
+  if(nama==='dalam') return 'Terdalam';
+  if(nama==='probe') return 'Titik';
+  return nama;
+}
+
+function gambarPanah3D(sx,sy,warna,dipilih,label){
+  var r    = dipilih ? 11 : 8;
+  var tinggi = dipilih ? 22 : 17;
+  c3.fillStyle = warna;
+  c3.beginPath();
+  c3.moveTo(sx, sy);
+  c3.lineTo(sx - r, sy - tinggi);
+  c3.lineTo(sx + r, sy - tinggi);
+  c3.closePath();
+  c3.fill();
+  c3.strokeStyle = dipilih ? '#ffffff' : '#0e1a26';
+  c3.lineWidth = dipilih ? 3 : 2;
+  c3.stroke();
+  if(dipilih){
+    c3.strokeStyle='rgba(255,255,255,0.85)';
+    c3.lineWidth=2;
+    c3.beginPath();
+    c3.arc(sx, sy, 10, 0, 6.2832);
+    c3.stroke();
+  }
+  c3.font = (dipilih ? 'bold ' : '') + '11px Segoe UI';
+  c3.fillStyle = dipilih ? '#ffffff' : '#dbe7f4';
+  c3.textAlign='center';
+  c3.fillText(label, sx, sy - tinggi - 4);
+  c3.textAlign='start';
+}
+
+/* ================ PETA 2D ================ */
+var petaBase=document.createElement('canvas');
+function bangunPeta(){
+  /* Ukuran peta base mengikuti ukuran cv2, dan kita render peta di koordinat
+     layar asli (bukan skala). Karena cv2 sudah di-resize, kita pakai S2 & O2. */
+  petaBase.width = cv2.width;
+  petaBase.height = cv2.height;
+  var ctx=petaBase.getContext('2d');
+  ctx.fillStyle='#0e1a26'; ctx.fillRect(0,0,petaBase.width,petaBase.height);
+  var s=S2, off=[OX2,OY2];
+  var selt=Math.max(lev-das,1e-6), q, j, i;
+  for(j=0;j<ny;j++) for(i=0;i<nx;i++){
+    var d=dalam(j,i), x=off[0]+i*s, y=off[1]+(ny-1-j)*s;
+    if(d===null){ ctx.fillStyle='#22303c'; }
+    else if(d<=1e-9){ var cc=ramp((Z[j][i]-zmin)/zr); ctx.fillStyle='rgb('+cc[0]+','+cc[1]+','+cc[2]+')'; }
+    else{ var t2=Math.min(1,d/selt); ctx.fillStyle='rgb('+Math.round(190-120*t2)+','+Math.round(225-155*t2)+','+Math.round(245-40*t2)+')'; }
+    ctx.fillRect(x,y,s+0.6,s+0.6);
+  }
+  ctx.strokeStyle='rgba(255,209,102,0.9)'; ctx.lineWidth=1.5;
+  for(q=0;q<D.poligon.length;q++){
+    var pol=D.poligon[q], p, k;
+    ctx.beginPath();
+    for(k=0;k<pol.luar.length;k++){
+      var pt=pol.luar[k];
+      if(k===0) ctx.moveTo(off[0]+pt[0]*s, off[1]+(ny-pt[1])*s);
+      else ctx.lineTo(off[0]+pt[0]*s, off[1]+(ny-pt[1])*s);
+    }
+    ctx.closePath(); ctx.stroke();
+    for(var hb=0;hb<pol.lubang.length;hb++){
+      ctx.beginPath();
+      for(k=0;k<pol.lubang[hb].length;k++){
+        var pt2=pol.lubang[hb][k];
+        if(k===0) ctx.moveTo(off[0]+pt2[0]*s, off[1]+(ny-pt2[1])*s);
+        else ctx.lineTo(off[0]+pt2[0]*s, off[1]+(ny-pt2[1])*s);
+      }
+      ctx.closePath(); ctx.stroke();
+    }
+  }
+  tanda2(ctx,s,off,D.bibir,'#7fe08a');
+  tanda2(ctx,s,off,D.dalam,'#ff6b6b');
+  /* skala batang */
+  var nSk=Math.max(1,Math.round(nx/8)), mSk=step*nSk;
+  ctx.strokeStyle='#dbe7f4'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(14,petaBase.height-16); ctx.lineTo(14+nSk*s, petaBase.height-16);
+  ctx.stroke();
+  /* panah utara */
+  ctx.strokeStyle='#dbe7f4'; ctx.fillStyle='#dbe7f4';
+  ctx.beginPath(); ctx.moveTo(petaBase.width-26,40); ctx.lineTo(petaBase.width-26,16);
+  ctx.lineTo(petaBase.width-32,24); ctx.moveTo(petaBase.width-26,16); ctx.lineTo(petaBase.width-20,24);
+  ctx.stroke();
+  ctx.font='bold 12px Segoe UI'; ctx.fillText('U', petaBase.width-30,56);
+  ctx.font='12px Segoe UI'; ctx.fillText(fmt(mSk,0)+' m', 14, petaBase.height-24);
+}
+function tanda2(ctx,s,off,p,warna){
+  var x=off[0]+p.px[0]*s, y=off[1]+(ny-p.px[1])*s;
+  ctx.fillStyle=warna; ctx.beginPath(); ctx.arc(x,y,4,0,6.2832); ctx.fill();
+  ctx.font='bold 11px Segoe UI';
+  ctx.fillText(p.nama+' '+fmt(p.elev,1)+' m',x+7,y+4);
+}
+
+function gambar2(){
+  var s=S2, off=[OX2,OY2];
+  c2.drawImage(petaBase,0,0);
+
+  /* Klik probe */
+  if(probe){
+    var j=probe[0], i=probe[1];
+    var pxx=off[0]+(i+0.5)*s, pyy=off[1]+(ny-(j+0.5))*s;
+    if(blinkState){
+      c2.strokeStyle='rgba(255,255,255,0.85)'; c2.lineWidth=2;
+      c2.beginPath(); c2.arc(pxx,pyy,12,0,6.2832); c2.stroke();
+    }
+    c2.strokeStyle='#ffffff'; c2.lineWidth=2;
+    c2.beginPath();
+    c2.moveTo(pxx-8,pyy); c2.lineTo(pxx+8,pyy);
+    c2.moveTo(pxx,pyy-8); c2.lineTo(pxx,pyy+8);
+    c2.stroke();
+    c2.fillStyle='#ffd166';
+    c2.beginPath(); c2.arc(pxx,pyy,3.5,0,6.2832); c2.fill();
+  }
+
+  /* Highlight titik kunci aktif */
+  if(titikAktif){
+    var hx=null, hy=null, hw=null;
+    if(titikAktif==='bibir'){ hx=D.bibir.px[0]; hy=D.bibir.px[1]; hw='#7fe08a'; }
+    else if(titikAktif==='dalam'){ hx=D.dalam.px[0]; hy=D.dalam.px[1]; hw='#ff6b6b'; }
+    else if(titikAktif==='probe'&&probe){ hx=probe[1]+0.5; hy=probe[0]+0.5; hw='#ffd166'; }
+    if(hx!==null){
+      var sx2=off[0]+hx*s, sy2=off[1]+(ny-hy)*s;
+      if(blinkState){
+        c2.strokeStyle='rgba(255,255,255,0.9)'; c2.lineWidth=3;
+        c2.beginPath(); c2.arc(sx2,sy2,14,0,6.2832); c2.stroke();
+      }
+      c2.fillStyle=hw;
+      c2.beginPath(); c2.arc(sx2,sy2,6,0,6.2832); c2.fill();
+      c2.strokeStyle='#ffffff'; c2.lineWidth=2;
+      c2.beginPath(); c2.arc(sx2,sy2,8,0,6.2832); c2.stroke();
+    }
+  }
+}
+
+/* ================ STATISTIK & KARTU ================ */
+function stat(){
+  var lv=luasVol();
+  var t3=[];
+  t3.push('Air saat ini: <b>'+fmt(W,2)+' m</b>');
+  t3.push('Luas tergenang: <b>'+fmt(lv[0]/10000,3)+' ha</b>');
+  t3.push('Volume: <b>'+fmt(lv[1],0)+' m3</b>');
+  statEl.innerHTML=t3.join(' &nbsp;|&nbsp; ');
+  document.getElementById('vAir').textContent=fmt(W,2)+' m';
+  updateKartuInfo();
+  updateTombolNav();
+}
+
+function updateKartuInfo(){
+  try{
+    var dBibir=dalam(Math.floor(D.bibir.px[1]), Math.floor(D.bibir.px[0]));
+    var kbElev=document.getElementById('kb-elev');
+    if(kbElev){
+      kbElev.textContent       = fmt(D.bibir.elev,2)+' m';
+      document.getElementById('kb-dalam').textContent  = fmt((dBibir===null?0:dBibir),2)+' m';
+      document.getElementById('kb-ll').textContent     = D.bibir_ll[0].toFixed(6)+', '+D.bibir_ll[1].toFixed(6);
+      document.getElementById('kb-status').textContent = ((dBibir||0)>0.01)?'Tergenang':'Kering';
+    }
+    var dDalam=dalam(Math.floor(D.dalam.px[1]), Math.floor(D.dalam.px[0]));
+    var ktElev=document.getElementById('kt-elev');
+    if(ktElev){
+      ktElev.textContent       = fmt(D.dalam.elev,2)+' m';
+      document.getElementById('kt-dalam').textContent  = fmt((dDalam===null?0:dDalam),2)+' m';
+      document.getElementById('kt-maks').textContent   = fmt(D.kedalaman_maks,2)+' m';
+      document.getElementById('kt-ll').textContent     = D.dalam_ll[0].toFixed(6)+', '+D.dalam_ll[1].toFixed(6);
+    }
+  }catch(e){}
+}
+
+/* ================ PANEL INFO ================ */
+function updatePanelInfo(){
+  var el=document.getElementById('panelInfo');
+  if(!el) return;
+  if(titikAktif==='bibir'){
+    var dB=dalam(Math.floor(D.bibir.px[1]), Math.floor(D.bibir.px[0]));
+    el.innerHTML='<span class="tutup" onclick="tutupInfo()">✕ Tutup</span>🟢 <span class="kunci">Bibir Terendah</span> — elevasi <b>'+
+      fmt(D.bibir.elev,2)+' m</b>, kedalaman air saat ini <b>'+fmt((dB===null?0:dB),2)+
+      ' m</b>, status <b>'+((dB||0)>0.01?'Tergenang':'Kering')+'</b>, koordinat WGS84 <b>'+
+      D.bibir_ll[0].toFixed(6)+', '+D.bibir_ll[1].toFixed(6)+'</b>.';
+    return;
+  }
+  if(titikAktif==='dalam'){
+    var dD=dalam(Math.floor(D.dalam.px[1]), Math.floor(D.dalam.px[0]));
+    el.innerHTML='<span class="tutup" onclick="tutupInfo()">✕ Tutup</span>🔴 <span class="kunci">Dasar Terdalam</span> — elevasi <b>'+
+      fmt(D.dalam.elev,2)+' m</b>, kedalaman air saat ini <b>'+fmt((dD===null?0:dD),2)+
+      ' m</b>, kedalaman maksimum <b>'+fmt(D.kedalaman_maks,2)+' m</b>, koordinat WGS84 <b>'+
+      D.dalam_ll[0].toFixed(6)+', '+D.dalam_ll[1].toFixed(6)+'</b>.';
+    return;
+  }
+  if(probe){
+    var j=probe[0], i=probe[1];
+    var zv=Z[j][i];
+    if(zv===null||zv===undefined){
+      el.innerHTML='<span class="tutup" onclick="tutupInfo()">✕ Tutup</span>📍 <span class="kunci">Titik ('+j+','+i+')</span> — DI LUAR data elevasi.';
+      return;
+    }
+    var d=dalam(j,i);
+    var ll=lonlat(i+0.5, j+0.5);
+    var status=((d||0)>0.01)?'Tergenang':'Kering';
+    el.innerHTML='<span class="tutup" onclick="tutupInfo()">✕ Tutup</span>📍 <span class="kunci">Titik dipilih</span> — '+
+      'baris <b>'+j+'</b>, kolom <b>'+i+'</b>, '+
+      'elevasi tanah <b>'+fmt(zv,2)+' m</b>, '+
+      'kedalaman air <b>'+fmt((d===null?0:d),2)+' m</b> '+
+      '(status <b>'+status+'</b>), '+
+      'elevasi air saat ini <b>'+fmt(W,2)+' m</b>, '+
+      'koordinat WGS84 <b>'+ll[0].toFixed(6)+', '+ll[1].toFixed(6)+'</b>.';
+    return;
+  }
+  el.innerHTML='Klik <b>icon panah</b> di 3D (🟢 Bibir / 🔴 Terdalam) atau tombol navigasi untuk detail titik kunci. <b>Klik di mana saja pada peta 2D</b> untuk info koordinat, elevasi, dan kedalaman titik tersebut.';
+}
+
+window.tutupInfo=function(){
+  titikAktif=null;
+  probe=null;
+  hentikanBlink();
+  gambar3(); gambar2();
+  updatePanelInfo();
+  updateTombolNav();
+};
+
+function pilihTitik(nama){
+  titikAktif=nama;
+  if(nama!=='probe'){
+    probe=null;
+    var ik=document.getElementById('inKoor'); if(ik) ik.value='';
+  }
+  gambar3(); gambar2();
+  updatePanelInfo();
+  updateTombolNav();
+  mulaiBlink();
+}
+
+function mulaiBlink(){
+  hentikanBlink();
+  blinkState=false;
+  var n=0;
+  blinkTimer=setInterval(function(){
+    blinkState=!blinkState;
+    gambar2();
+    if(++n>=12){ hentikanBlink(); gambar3(); gambar2(); }
+  }, 280);
+}
+function hentikanBlink(){
+  if(blinkTimer){ clearInterval(blinkTimer); blinkTimer=null; }
+  blinkState=false;
+}
+
+function updateTombolNav(){
+  var b1=document.getElementById('bNavBibir');
+  var b2=document.getElementById('bNavDalam');
+  if(b1) b1.classList.toggle('aktif', titikAktif==='bibir');
+  if(b2) b2.classList.toggle('aktif', titikAktif==='dalam');
+}
+
+/* ================ ZOOM KAMERA 3D ================ */
+function zoomKe(which){
+  var p=null;
+  if(which==='bibir'){ p=D.bibir; }
+  else if(which==='dalam'){ p=D.dalam; }
+  if(!p) return;
+  var xw=(p.px[0]-0.5-cx)*step/rng;
+  var yw=(p.px[1]-0.5-cyc)*step/rng;
+  yaw=Math.atan2(xw,yw)+Math.PI;
+  pitch=0.8;
+  zoom=2.2;
+  perluB=true;
+  sinkronUkuranCanvas();
+  gambar3();
+  pilihTitik(which);
+  pesan('Kamera difokuskan ke '+p.nama+' (elevasi '+fmt(p.elev,2)+' m).');
+}
+window.zoomKe=zoomKe;
+
+/* ================ INTERAKSI ================ */
+cv3.addEventListener('click', function(e){
+  var r=cv3.getBoundingClientRect();
+  var mx=(e.clientX-r.left)*(cv3.width/r.width);
+  var my=(e.clientY-r.top)*(cv3.height/r.height);
+  var terpilih=null, bestD=1e9;
+  for(var i=0;i<HOTSPOTS.length;i++){
+    var h=HOTSPOTS[i];
+    var d=Math.hypot(mx-h.x, my-h.y);
+    if(d<26 && d<bestD){ bestD=d; terpilih=h.nama; }
+  }
+  if(terpilih){
+    pilihTitik(terpilih);
+    pesan('Titik dipilih: '+namaSingkat(terpilih)+'.');
+    return;
+  }
+  pesan('Klik icon panah (Bibir/Terdalam) untuk detail, atau klik peta 2D untuk info titik.');
+});
+
+cv2.addEventListener('click', function(e){
+  var r=cv2.getBoundingClientRect();
+  var mx=(e.clientX-r.left)*(cv2.width/r.width), my=(e.clientY-r.top)*(cv2.height/r.height);
+  var s=S2, off=[OX2,OY2];
+  var i=Math.floor((mx-off[0])/s), j=(ny-1)-Math.floor((my-off[1])/s);
+  if(i<0||j<0||i>=nx||j>=ny){
+    pesan('Klik di dalam area peta.');
+    probe=null; titikAktif=null;
+    var ikOut=document.getElementById('inKoor'); if(ikOut) ikOut.value='';
+    gambar3(); gambar2(); updatePanelInfo(); updateTombolNav();
+    return;
+  }
+  probe=[j,i];
+  titikAktif=null;
+  var ikIn=document.getElementById('inKoor'); if(ikIn) ikIn.value='';
+  gambar3(); gambar2();
+  updatePanelInfo();
+  updateTombolNav();
+  mulaiBlink();
+});
+
+document.getElementById('bNavBibir').addEventListener('click', function(){ pilihTitik('bibir'); });
+document.getElementById('bNavDalam').addEventListener('click', function(){ pilihTitik('dalam'); });
+
+document.getElementById('bReset3').addEventListener('click', function(){
+  yaw=-0.7; pitch=1.05; zoom=1.0; perluB=true;
+  sinkronUkuranCanvas();
+  gambar3();
+});
+var mb=false, mx3=0, my3=0;
+cv3.addEventListener('mousedown', function(e){ mb=true; mx3=e.clientX; my3=e.clientY; });
+window.addEventListener('mousemove', function(e){
+  if(!mb) return;
+  yaw+=(e.clientX-mx3)*0.006; pitch+=(e.clientY-my3)*0.006;
+  if(pitch<0.1) pitch=0.1; if(pitch>1.5) pitch=1.5;
+  mx3=e.clientX; my3=e.clientY; perluB=true; gambar3();
+});
+window.addEventListener('mouseup', function(){ mb=false; });
+cv3.addEventListener('wheel', function(e){
+  e.preventDefault();
+  zoom*=(e.deltaY<0?1.12:0.89);
+  if(zoom<0.3) zoom=0.3; if(zoom>8) zoom=8;
+  perluB=true; sinkronUkuranCanvas(); gambar3();
+},{passive:false});
+
+var sAir=document.getElementById('sAir');
+sAir.addEventListener('input', function(){
+  W=das+(lev-das)*(sAir.value/1000);
+  bangunPeta(); perluB=true;
+  gambar2(); gambar3(); stat(); updatePanelInfo();
+});
+
+/* ====== TOMBOL "BUKA DI GOOGLE EARTH": poligon genangan + URL ====== */
+function basahW(j,i){ if(j<0||i<0||j>=ny||i>=nx) return false;
+  var z=Z[j][i]; if(z===null||z===undefined||!WET[j][i]) return false;
+  return (W-z)>1e-9; }
+
+function telusuriTepiBasah(){
+  /* Kumpulkan tepi sel basah; sel basah selalu di KIRI arah jalan,
+     sehingga loop LUAR berlawanan jarum jam (luas tanda > 0) dan
+     LUBANG (pulau kering) searah jarum jam (< 0). */
+  var E={};
+  function tambah(x1,y1,x2,y2){ var k=x1+','+y1; if(!E[k]) E[k]=[]; E[k].push([x2,y2]); }
+  for(var j=0;j<ny;j++) for(var i=0;i<nx;i++){
+    if(!basahW(j,i)) continue;
+    if(!basahW(j-1,i)) tambah(i,   j,   i+1, j  );  /* selatan: barat -> timur   */
+    if(!basahW(j,i+1)) tambah(i+1, j,   i+1, j+1);  /* timur  : selatan -> utara */
+    if(!basahW(j+1,i)) tambah(i+1, j+1, i,   j+1);  /* utara  : timur -> barat   */
+    if(!basahW(j,i-1)) tambah(i,   j+1, i,   j  );  /* barat  : utara -> selatan */
+  }
+  var loop=[];
+  for(var kunci in E){
+    var lst=E[kunci];
+    for(var t=0;t<lst.length;t++){
+      if(!lst[t]) continue;
+      var a=kunci.split(','), x0=+a[0], y0=+a[1];
+      var titik=[[x0,y0]], ax=lst[t][0], ay=lst[t][1];
+      lst[t]=null;
+      while(ax!==x0||ay!==y0){
+        titik.push([ax,ay]);
+        var l2=E[ax+','+ay], nx2=null, ny2=null;
+        for(var u=0;u<l2.length;u++){
+          if(l2[u]){ nx2=l2[u][0]; ny2=l2[u][1]; l2[u]=null; break; }
+        }
+        if(nx2===null){ ax=x0; ay=y0; break; }  /* darurat: tutup paksa */
+        ax=nx2; ay=ny2;
+      }
+      loop.push(titik);
+    }
+  }
+  return loop;
+}
+function luasTanda(titik){
+  var s=0;
+  for(var q=0;q<titik.length;q++){
+    var p1=titik[q], p2=titik[(q+1)%titik.length];
+    s+=p1[0]*p2[1]-p2[0]*p1[1];
+  }
+  return s/2;
+}
+function sederhanakanCincin(titik){
+  /* buang titik tengah yang segaris (hemat vertex KML) */
+  var hasil=[], n=titik.length;
+  for(var q=0;q<n;q++){
+    var a=titik[(q+n-1)%n], b=titik[q], c=titik[(q+1)%n];
+    if((b[0]-a[0])*(c[1]-b[1])!==(b[1]-a[1])*(c[0]-b[0])) hasil.push(b);
+  }
+  return hasil;
+}
+function titikDalamPoligon(t,pol){
+  var n=pol.length, d=false;
+  for(var q=0,r=n-1;q<n;r=q++){
+    var x1=pol[q][0], y1=pol[q][1], x2=pol[r][0], y2=pol[r][1];
+    if(((y1>t[1])!==(y2>t[1])) && (t[0]<(x2-x1)*(t[1]-y1)/((y2-y1)||1e-12)+x1)) d=!d;
+  }
+  return d;
+}
+function cincinKml(titik){
+  var s='';
+  for(var q=0;q<=titik.length;q++){
+    var p=titik[q%titik.length], ll=lonlat(p[0],p[1]);
+    s+=(q?' ':'')+ll[0].toFixed(8)+','+ll[1].toFixed(8)+','+W.toFixed(3);
+  }
+  return s;
+}
+function urlGoogleEarth(){
+  /* prinsip titik biru "posisi saya": close-up TEPAT ke titik dipilih,
+     pandangan tegak dari atas (tilt 0), jarak dekat */
+  var lonT, latT;
+  if(probe){ var lp=lonlat(probe[1]+0.5, probe[0]+0.5); lonT=lp[0]; latT=lp[1]; }
+  else{ var lc=lonlat(nx/2, ny/2); lonT=lc[0]; latT=lc[1]; }
+  var dekat=Math.max(25*step, 400);            /* jarak kamera dekat (m) */
+  var altT=Math.max((zmin+zmax)/2, 0);
+  return 'https://earth.google.com/web/@'+latT.toFixed(8)+','+lonT.toFixed(8)+','+
+         altT.toFixed(2)+'a,'+dekat.toFixed(2)+'d,35y,0h,0t,0r';
+}
+
+document.getElementById('bKml').addEventListener('click', function(){
+  function koordTitik(px,py,elev){ var ll=lonlat(px,py);
+    return ll[0].toFixed(8)+','+ll[1].toFixed(8)+','+elev.toFixed(3); }
+  /* --- titik kunci + titik yang dipilih --- */
+  var pm='<Placemark><name>Bibir terendah</name><Point><coordinates>'+
+         koordTitik(D.bibir.px[0],D.bibir.px[1],D.bibir.elev)+'</coordinates></Point></Placemark>'+
+         '<Placemark><name>Dasar terdalam</name><Point><coordinates>'+
+         koordTitik(D.dalam.px[0],D.dalam.px[1],D.dalam.elev)+'</coordinates></Point></Placemark>';
+  if(probe){
+    var j=probe[0], i=probe[1];
+    var zv=Z[j][i];
+    if(zv!==null&&zv!==undefined){
+      pm+='<Placemark><name>Titik dipilih ('+j+','+i+')</name><Point><coordinates>'+
+          koordTitik(i+0.5, j+0.5, zv)+'</coordinates></Point></Placemark>';
+    }
+  }
+  /* --- poligon area genangan pada tinggi air saat ini --- */
+  var pl='';
+  var loops=telusuriTepiBasah();
+  if(loops.length){
+    var luar=[], lub=[];
+    for(var q1=0;q1<loops.length;q1++){
+      var ring=sederhanakanCincin(loops[q1]);
+      if(ring.length>=4){ if(luasTanda(ring)>0) luar.push(ring); else lub.push(ring); }
+    }
+    var lv=luasVol();
+    for(var o=0;o<luar.length;o++){
+      var inner='';
+      for(var h=0;h<lub.length;h++){
+        if(titikDalamPoligon(lub[h][0], luar[o])){
+          inner+='<innerBoundaryIs><LinearRing><coordinates>'+cincinKml(lub[h])+'</coordinates></LinearRing></innerBoundaryIs>';
+        }
+      }
+      pl+='<Placemark><name>Area genangan air '+fmt(W,2)+' m'+(luar.length>1?' ('+(o+1)+')':'')+'</name>'+
+          '<description>Luas '+fmt(lv[0]/10000,3)+' ha pada tinggi air '+fmt(W,2)+' m.</description>'+
+          '<Style><LineStyle><color>ddffffff</color><width>1.4</width></LineStyle>'+
+          '<PolyStyle><color>8cffa046</color></PolyStyle></Style>'+
+          '<Polygon><outerBoundaryIs><LinearRing><coordinates>'+cincinKml(luar[o])+
+          '</coordinates></LinearRing></outerBoundaryIs>'+inner+'</Polygon></Placemark>';
+    }
+  }
+  var nPt=2+(probe?1:0);
+  var kml='<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'+
+    '<name>'+D.nama+' - titik kunci & area genangan - air '+fmt(W,2)+' m</name>'+
+    pm+pl+'</Document></kml>';
+  var blob=new Blob([kml],{type:'application/vnd.google-earth.kml+xml'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='genangan_'+D.id+'_air_'+Math.round(W*100)+'.kml';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  window.open(urlGoogleEarth(),'_blank');
+  pesan('Google Earth menampilkan posisi titik yang dipilih (prinsip "posisi saya di mana")'+
+        (probe?'':', pusat danau')+'. Untuk overlay lengkap ('+nPt+' titik'+(pl?' + area genangan':'')+
+        '): seret file '+a.download+' (terunduh otomatis) ke globe Google Earth.');
+});
+
+/* ====== TOMBOL "TITIK DI GOOGLE MAPS": pin merah langsung ====== */
+document.getElementById('bGmap').addEventListener('click', function(){
+  var lonT, latT;
+  if(probe){ var lp=lonlat(probe[1]+0.5, probe[0]+0.5); lonT=lp[0]; latT=lp[1]; }
+  else{ var lc=lonlat(nx/2, ny/2); lonT=lc[0]; latT=lc[1]; }
+  window.open('https://www.google.com/maps/search/?api=1&query='+
+              latT.toFixed(6)+','+lonT.toFixed(6),'_blank');
+  pesan('Google Maps: pin merah muncul LANGSUNG di '+(probe?'titik yang dipilih':'pusat danau')+
+        ' (tanpa file KML). Untuk 3D terrain + area genangan, gunakan tombol Buka di Google Earth.');
+});
+
+/* ====== INPUT MANUAL KOORDINAT (lat, lng) ====== */
+function parseKoor(teks){
+  /* terima "4.281231, 98.062937", "++4.281231, 98.062937++", pemisah , atau ; */
+  var s=String(teks||'').replace(/[+]/g,' ').trim();
+  if(!s) return null;
+  var m=s.split(/[,;]+/);
+  if(m.length<2) return null;
+  var a=parseFloat(m[0]), b=parseFloat(m[1]);
+  if(!isFinite(a)||!isFinite(b)) return null;
+  if(Math.abs(a)>90 && Math.abs(b)<=90){ var t=a; a=b; b=t; }  /* urutan lng,lat */
+  if(a<-90||a>90||b<-180||b>180) return null;
+  return [a,b];   /* [lat, lng] */
+}
+function balikLonlat(latT,lonT){
+  /* invers bilinear 4 sudut peta (Newton, turunan analitik); hasil px,py grid */
+  var sw=SUD[0],se=SUD[1],ne=SUD[2],nw=SUD[3];
+  var u=0.5, v=0.5, iter;
+  for(iter=0;iter<40;iter++){
+    var lon=sw[0]*(1-u)*(1-v)+se[0]*u*(1-v)+ne[0]*u*v+nw[0]*(1-u)*v;
+    var lat=sw[1]*(1-u)*(1-v)+se[1]*u*(1-v)+ne[1]*u*v+nw[1]*(1-u)*v;
+    var dx=lonT-lon, dy=latT-lat;
+    if(Math.abs(dx)<1e-9&&Math.abs(dy)<1e-9) break;
+    var a=(1-v)*(se[0]-sw[0])+v*(ne[0]-nw[0]);   /* dlon/du */
+    var b=(1-u)*(nw[0]-sw[0])+u*(ne[0]-se[0]);   /* dlon/dv */
+    var c=(1-v)*(se[1]-sw[1])+v*(ne[1]-nw[1]);   /* dlat/du */
+    var d=(1-u)*(nw[1]-sw[1])+u*(ne[1]-se[1]);   /* dlat/dv */
+    var det=a*d-b*c; if(Math.abs(det)<1e-12) return null;
+    u+= ( d*dx-b*dy)/det;
+    v+= (-c*dx+a*dy)/det;
+    if(u<0)u=0; if(u>1)u=1; if(v<0)v=0; if(v>1)v=1;
+  }
+  return [u*nx, v*ny];
+}
+function cariSelData(j,i){
+  /* sel terdekat yang punya data elevasi (spiral radius<=3) */
+  j=Math.max(0,Math.min(ny-1,j)); i=Math.max(0,Math.min(nx-1,i));
+  if(Z[j][i]!==null&&Z[j][i]!==undefined) return [j,i];
+  for(var r=1;r<=3;r++){
+    for(var dj=-r;dj<=r;dj++) for(var di=-r;di<=r;di++){
+      if(Math.max(Math.abs(dj),Math.abs(di))!==r) continue;
+      var j2=j+dj, i2=i+di;
+      if(j2<0||i2<0||j2>=ny||i2>=nx) continue;
+      if(Z[j2][i2]!==null&&Z[j2][i2]!==undefined) return [j2,i2];
+    }
+  }
+  return null;
+}
+function terapkanKoor(){
+  var ll=parseKoor(document.getElementById('inKoor').value);
+  if(!ll){ pesan('Koordinat tidak dikenali. Contoh benar: 4.281231, 98.062937 (lat, lng, titik desimal).'); return; }
+  var uv=balikLonlat(ll[0], ll[1]);
+  if(!uv||uv[0]<0||uv[0]>nx||uv[1]<0||uv[1]>ny){
+    pesan('Koordinat '+ll[0].toFixed(6)+', '+ll[1].toFixed(6)+' berada DI LUAR area peta ini.'); return;
+  }
+  var sel=cariSelData(Math.floor(uv[1]), Math.floor(uv[0]));
+  if(!sel){ pesan('Tidak ada data elevasi di sekitar koordinat tersebut.'); return; }
+  probe=[sel[0], sel[1]];
+  titikAktif=null;
+  gambar3(); gambar2();
+  updatePanelInfo();
+  updateTombolNav();
+  mulaiBlink();
+  pesan('Titik manual ('+ll[0].toFixed(6)+', '+ll[1].toFixed(6)+') tampil di 2D & 3D'+
+        ' (dipetakan ke ubin '+sel[0]+','+sel[1]+' = pusat sel).');
+}
+document.getElementById('bSetKoor').addEventListener('click', terapkanKoor);
+document.getElementById('inKoor').addEventListener('keydown', function(e){
+  if(e.key==='Enter') terapkanKoor();
+});
+document.getElementById('bHapusKoor').addEventListener('click', function(){
+  document.getElementById('inKoor').value='';
+  probe=null; titikAktif=null;
+  gambar3(); gambar2(); updatePanelInfo(); updateTombolNav();
+  pesan('Titik manual dihapus.');
+});
+
+/* ================ RESIZE OBSERVER ================ */
+var resizeTimer=null;
+function tundaResize(){
+  if(resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer=setTimeout(function(){
+    sinkronUkuranCanvas();
+    bangunPeta();
+    gambar3(); gambar2();
+  }, 80);
+}
+if(window.ResizeObserver){
+  var ro=new ResizeObserver(tundaResize);
+  ro.observe(document.getElementById('dualView'));
+} else {
+  window.addEventListener('resize', tundaResize);
+}
+
+/* ================ BOOT ================ */
+/* Paksa layout selesai dulu (browser biasanya sudah) sebelum ukur canvas */
+sinkronUkuranCanvas();
+bangunPeta();
+gambar2(); gambar3(); stat();
+updatePanelInfo();
+pesan('Klik icon panah (Bibir/Terdalam) untuk detail titik kunci, atau klik peta 2D untuk info titik.');
+})();
+</script>
+</body></html>
